@@ -2,17 +2,20 @@ defmodule AdventOfCode.Day02 do
   @input AdventOfCode.Input.get!(2, 2023)
 
   def part1(input \\ @input) do
-    games =
-      input
-      |> parse()
-      |> Enum.map(&ElfGame.parse_game(&1))
-
-    possible_games = ElfGame.possible_games(games, Cube.new(12, 13, 14))
-
-    ElfGame.sum_ids(possible_games)
+    input
+    |> parse()
+    |> Enum.map(&ElfGame.parse_game(&1))
+    |> ElfGame.possible_games(Cube.new(12, 13, 14))
+    |> ElfGame.sum_ids()
   end
 
-  def part2(_args) do
+  def part2(input \\ @input) do
+    input
+    |> parse()
+    |> Enum.map(&ElfGame.parse_game(&1))
+    |> ElfGame.fewest_number_of_cubes()
+    |> Enum.map(&Cube.power(&1))
+    |> Enum.sum()
   end
 
   defp parse(input) do
@@ -25,7 +28,7 @@ defmodule Game do
 
   def new(id), do: %Game{id: id, rounds: []}
 
-  def add_round(game, round), do: %{game | rounds: [round | game.rounds]}
+  def add_rounds(game, rounds) when is_list(rounds), do: %{game | rounds: rounds ++ game.rounds}
 end
 
 defmodule Cube do
@@ -35,6 +38,10 @@ defmodule Cube do
 
   def possible?(cube, bag) do
     cube.red <= bag.red && cube.green <= bag.green && cube.blue <= bag.blue
+  end
+
+  def power(cube) do
+    cube.red * cube.blue * cube.green
   end
 end
 
@@ -46,8 +53,8 @@ defmodule ElfGame do
     game = Game.new(id)
 
     Enum.reduce(rounds, game, fn round, game ->
-      cube = parse_round(round)
-      Game.add_round(game, cube)
+      cubes = parse_round(round)
+      Game.add_rounds(game, cubes)
     end)
   end
 
@@ -70,11 +77,31 @@ defmodule ElfGame do
     end)
   end
 
+  def fewest_number_of_cubes(games) do
+    games
+    |> Enum.map(fn game ->
+      for round <- game.rounds, reduce: Cube.new(0, 0, 0) do
+        cube ->
+          cube =
+            Map.update(cube, :red, cube.red, fn existing_value ->
+              if existing_value >= round.red, do: existing_value, else: round.red
+            end)
+
+          cube =
+            Map.update(cube, :green, cube.green, fn existing_value ->
+              if existing_value >= round.green, do: existing_value, else: round.green
+            end)
+
+          Map.update(cube, :blue, cube.blue, fn existing_value ->
+            if existing_value >= round.blue, do: existing_value, else: round.blue
+          end)
+      end
+    end)
+  end
+
   def possible_games(games, bag) do
     Enum.filter(games, fn game ->
-      Enum.all?(game.rounds, fn round ->
-        Enum.all?(round, &Cube.possible?(&1, bag))
-      end)
+      Enum.all?(game.rounds, &Cube.possible?(&1, bag))
     end)
   end
 
