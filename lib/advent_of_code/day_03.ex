@@ -1,5 +1,6 @@
 defmodule AdventOfCode.Day03 do
   @input AdventOfCode.Input.get!(3, 2023)
+
   def part1(input \\ @input) do
     schematic =
       input
@@ -9,11 +10,11 @@ defmodule AdventOfCode.Day03 do
     |> Enum.with_index()
     |> Enum.map(&get_numbers_and_indices/1)
     |> List.flatten()
-    |> Enum.map(fn tuple -> Tuple.append(tuple, get_adjacent_points(tuple)) end)
-    |> Enum.filter(fn {_, _, _, points} ->
+    |> Enum.map(fn number -> Map.put(number, :positions_to_check, get_adjacent_points(number)) end)
+    |> Enum.filter(fn %{positions_to_check: points} ->
       validate_point(schematic, points)
     end)
-    |> Enum.map(fn {number, _, _, _} -> number end)
+    |> Enum.map(& &1.number)
     |> Enum.sum()
   end
 
@@ -28,8 +29,11 @@ defmodule AdventOfCode.Day03 do
 
         current_number != "" ->
           {[
-             {String.to_integer(current_number),
-              (char_index - String.length(current_number))..(char_index - 1), line_index}
+             %{
+               number: String.to_integer(current_number),
+               index_range: (char_index - String.length(current_number))..(char_index - 1),
+               row: line_index
+             }
              | acc
            ], ""}
 
@@ -43,16 +47,19 @@ defmodule AdventOfCode.Day03 do
 
       {acc, current_number} ->
         [
-          {String.to_integer(current_number),
-           (String.length(line) - String.length(current_number))..(String.length(line) - 1),
-           line_index}
+          %{
+            number: String.to_integer(current_number),
+            index_range:
+              (String.length(line) - String.length(current_number))..(String.length(line) - 1),
+            row: line_index
+          }
           | acc
         ]
     end
     |> Enum.reverse()
   end
 
-  def get_adjacent_points({_, x_range, y}) do
+  def get_adjacent_points(%{index_range: x_range, row: y}) do
     x_start = Enum.min(x_range) - 1
     x_end = Enum.max(x_range) + 1
     y_start = y - 1
@@ -66,7 +73,7 @@ defmodule AdventOfCode.Day03 do
 
     if line do
       char = String.at(line, x)
-      char not in [nil, "."] and not String.match?(char, ~r/\d/)
+      char not in [nil, ".", " "] and not String.match?(char, ~r/\d/)
     else
       false
     end
@@ -74,11 +81,6 @@ defmodule AdventOfCode.Day03 do
 
   def validate_point(schematic, points) do
     Enum.any?(points, &point_has_symbol?(schematic, &1))
-  end
-
-  def validate_all_points(schematic, points_list) do
-    schematic = String.split(schematic, "\n", trim: true)
-    Enum.map(points_list, &validate_point(schematic, &1))
   end
 
   def part2(input \\ @input) do
@@ -91,7 +93,9 @@ defmodule AdventOfCode.Day03 do
       |> Enum.with_index()
       |> Enum.map(&get_numbers_and_indices/1)
       |> List.flatten()
-      |> Enum.map(fn tuple -> Tuple.append(tuple, get_adjacent_points(tuple)) end)
+      |> Enum.map(fn number ->
+        Map.put(number, :positions_to_check, get_adjacent_points(number))
+      end)
 
     get_star_numbers(schematic, numbers)
     |> Enum.map(fn [x, y] -> x * y end)
@@ -110,14 +114,15 @@ defmodule AdventOfCode.Day03 do
 
   def get_numbers_for_star(numbers, {star_y, star_x}) do
     numbers
-    |> Enum.filter(fn {_, _, _, points} ->
+    |> Enum.filter(fn %{positions_to_check: points} ->
       Enum.any?(points, fn {x, y} -> x == star_x and y == star_y end)
     end)
-    |> Enum.map(fn {number, _, _, _} -> number end)
+    |> Enum.map(& &1.number)
   end
 
   def get_star_numbers(schematic, numbers) do
-    get_star_positions(schematic)
+    schematic
+    |> get_star_positions()
     |> Enum.map(&get_numbers_for_star(numbers, &1))
     |> Enum.filter(&match?([_, _], &1))
   end
