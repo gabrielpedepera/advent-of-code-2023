@@ -6,15 +6,13 @@ defmodule AdventOfCode.Day07Test do
   test "part1" do
     result = part1(input())
 
-    assert 6440 = result
+    assert 6440 == result
   end
 
-  @tag :skip
   test "part2" do
-    input = nil
-    result = part2(input)
+    result = part2(input())
 
-    assert result
+    assert 5905 == result
   end
 
   defp input do
