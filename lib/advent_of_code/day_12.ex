@@ -13,31 +13,148 @@ defmodule AdventOfCode.Day12 do
   def part2(input \\ @input) do
     input
     |> String.split("\n", trim: true)
-    |> Enum.map(&parse_line/1)
-    |> Enum.map(&unfold_records/1)
-    |> Enum.map(&count_valid_arrangements/1)
-    |> Enum.reduce(0, fn el, acc ->
-      acc + el[:arrangements]
+    |> Task.async_stream(fn line ->
+      [row, counts] = String.split(line, " ", trim: true, parts: 2)
+
+      sequence =
+        row
+        |> String.graphemes()
+        |> Enum.chunk_by(& &1)
+        |> Enum.map(fn chunk ->
+          if Enum.any?(chunk, &(&1 == "?")), do: chunk, else: Enum.join(chunk, "")
+        end)
+        |> List.flatten()
+
+      counts = ~r/\d+/ |> Regex.scan(counts) |> List.flatten() |> Enum.map(&String.to_integer/1)
+
+      {sequence, counts} =
+        {(sequence ++ ["?"]) |> List.duplicate(5) |> List.flatten() |> Enum.drop(-1),
+         counts |> List.duplicate(5) |> List.flatten()}
+
+      total_arrangements(sequence, counts, 1)
     end)
+    |> Enum.reduce(0, fn {:ok, total}, acc -> acc + total end)
   end
 
-  defp unfold_records(%{regions: regions, groups: groups} = map) do
-    unfolded_regions = unfold_regions(regions)
-    unfolded_groups = unfold_groups(groups)
-    %{map | regions: unfolded_regions, groups: unfolded_groups}
+  defp total_arrangements(sequence, counts, acc, inside? \\ false)
+
+  defp total_arrangements(
+         [sequence_head | sequence_tail] = sequence,
+         [count_head | count_tail] = counts,
+         acc,
+         inside?
+       ) do
+    case Process.get({sequence, counts}) do
+      nil ->
+        if length(sequence) < length(counts) do
+          memoize({sequence, counts}, 0)
+        else
+          cond do
+            String.contains?(sequence_head, ".") ->
+              if inside? do
+                memoize({sequence, counts}, 0)
+              else
+                memoize(
+                  {sequence, counts},
+                  acc * total_arrangements(sequence_tail, counts, acc, false)
+                )
+              end
+
+            String.contains?(sequence_head, "#") ->
+              cond do
+                count_head < String.length(sequence_head) ->
+                  memoize({sequence, counts}, 0)
+
+                count_head == String.length(sequence_head) ->
+                  memoize(
+                    {sequence, counts},
+                    if length(sequence_tail) > 0 do
+                      acc * total_arrangements(tl(sequence_tail), count_tail, acc)
+                    else
+                      acc
+                    end
+                  )
+
+                count_head > String.length(sequence_head) ->
+                  memoize(
+                    {sequence, counts},
+                    if length(sequence_tail) > 0 do
+                      acc *
+                        total_arrangements(
+                          sequence_tail,
+                          [count_head - String.length(sequence_head) | count_tail],
+                          acc,
+                          true
+                        )
+                    else
+                      0
+                    end
+                  )
+              end
+
+            sequence_head == "?" ->
+              count_if_filled =
+                if length(sequence_tail) > 0 do
+                  next_chunk = List.first(sequence_tail)
+
+                  cond do
+                    String.contains?(next_chunk, ".") and count_head > 1 ->
+                      0
+
+                    String.contains?(next_chunk, "#") and count_head == 1 ->
+                      0
+
+                    String.contains?(next_chunk, "?") and count_head == 1 ->
+                      total_arrangements(tl(sequence_tail), count_tail, acc, false)
+
+                    count_head == 1 ->
+                      if length(sequence_tail) > 0 do
+                        total_arrangements(tl(sequence_tail), count_tail, acc, false)
+                      else
+                        acc
+                      end
+
+                    true ->
+                      total_arrangements(sequence_tail, [count_head - 1 | count_tail], acc, true)
+                  end
+                else
+                  if count_head == 1 do
+                    1
+                  else
+                    0
+                  end
+                end
+
+              count_if_skipped =
+                if inside? do
+                  0
+                else
+                  total_arrangements(sequence_tail, counts, acc, inside?)
+                end
+
+              memoize({sequence, counts}, acc * (count_if_skipped + count_if_filled))
+          end
+        end
+
+      result ->
+        result
+    end
   end
 
-  defp unfold_regions(regions) do
-    regions
-    |> List.duplicate(5)
-    |> Enum.intersperse("?")
-    |> List.flatten()
+  defp total_arrangements([], [], _acc, _inside?), do: 1
+  defp total_arrangements([], _counts, _acc, _inside?), do: 0
+
+  defp total_arrangements(sequence, [], _acc, _inside?) do
+    if Enum.any?(sequence, &String.contains?(&1, "#")) do
+      0
+    else
+      1
+    end
   end
 
-  defp unfold_groups(groups) do
-    groups
-    |> List.duplicate(5)
-    |> List.flatten()
+  defp memoize({sequence, counts}, total) do
+    Process.put({sequence, counts}, total)
+    total
   end
 
   defp parse_line(line) do
@@ -49,11 +166,11 @@ defmodule AdventOfCode.Day12 do
     %{regions: regions_list, groups: groups_list, arrangements: 0}
   end
 
-  defp count_valid_arrangements(%{regions: regions, groups: groups} = map) do
+  def count_valid_arrangements(%{regions: regions, groups: groups} = map) do
     valid_arrangements =
       replace_unknowns(regions)
-      |> Enum.reduce(0, fn new_regions, acc ->
-        if validate_galaxies(new_regions, groups), do: acc + 1, else: acc
+      |> Enum.reduce(0, fn %{arrangement: arrangement, multiplier: multiplier}, acc ->
+        if validate_galaxies(arrangement, groups), do: acc + multiplier, else: acc
       end)
 
     %{map | arrangements: valid_arrangements}
@@ -72,6 +189,12 @@ defmodule AdventOfCode.Day12 do
         end)
 
       replace_unknowns_in_regions(regions, replacements)
+    end)
+    |> Enum.map(fn arrangement ->
+      %{
+        arrangement: arrangement,
+        multiplier: :math.pow(5, Enum.count(arrangement, &(&1 == "?")))
+      }
     end)
   end
 

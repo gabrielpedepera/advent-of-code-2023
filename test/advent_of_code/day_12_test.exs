@@ -10,11 +10,11 @@ defmodule AdventOfCode.Day12Test do
   end
 
   # @tag timeout: 600_000
-  # test "part2" do
-  #   result = part2(input())
+  test "part2" do
+    result = part2(input())
 
-  #   assert 525_152 == result
-  # end
+    assert 525_152 == result
+  end
 
   def input do
     """
