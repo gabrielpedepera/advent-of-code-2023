@@ -3,19 +3,27 @@ defmodule AdventOfCode.Day12Test do
 
   import AdventOfCode.Day12
 
-  @tag :skip
   test "part1" do
-    input = nil
-    result = part1(input)
+    result = part1(input())
 
-    assert result
+    assert 21 == result
   end
 
-  @tag :skip
-  test "part2" do
-    input = nil
-    result = part2(input)
+  # @tag timeout: 600_000
+  # test "part2" do
+  #   result = part2(input())
 
-    assert result
+  #   assert 525_152 == result
+  # end
+
+  def input do
+    """
+    ???.### 1,1,3
+    .??..??...?##. 1,1,3
+    ?#?#?#?#?#?#?#? 1,3,1,6
+    ????.#...#... 4,1,1
+    ????.######..#####. 1,6,5
+    ?###???????? 3,2,1
+    """
   end
 end
